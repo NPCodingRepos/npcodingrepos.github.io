@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NPC Conversion Advisor · customer data</title>
+<style>
+  :root { --bg: #fbfbf9; --fg: #1d2326; --muted: #59636a; --line: #dde1e3; --code: #eef1f2; --accent: #0b6e4f }
+  body { background: var(--bg); color: var(--fg); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0 }
+  main { max-width: 760px; margin: 0 auto; padding-block: 40px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+  h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 4px; text-wrap: balance }
+  h2 { font-size: 1.1rem; margin: 32px 0 8px }
+  .meta { color: var(--muted); margin: 0 0 24px }
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.5 }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace }
+  blockquote { margin: 0; padding: 8px 14px; border-left: 3px solid var(--accent); background: var(--code) }
+  table { border-collapse: collapse; width: 100%; font-size: 14px }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top }
+  a { color: var(--accent) }
+</style>
+</head>
+<body>
+<main>
+<h1>NPC Conversion Advisor: why the app declares customer name, email, phone and address</h1>
+<p class="meta">For the Shopify App Store review, reference 147856. NPCoding, November 2026.</p>
+
+<h2>Short answer</h2>
+<p>The app never reads, stores or sends a customer's name, email, phone or address. It declares these four fields only because
+Shopify requires them for the one API the app is built on: the Admin GraphQL query <code>shopifyqlQuery</code> (scope
+<code>read_reports</code>). Shopify's documentation for that query states the requirement:</p>
+<blockquote>"Level 2 access to Customer data including name, address, phone, and email fields."</blockquote>
+<p>Source: <a href="https://shopify.dev/docs/api/admin-graphql/latest/queries/shopifyqlQuery">shopify.dev/docs/api/admin-graphql/latest/queries/shopifyqlQuery</a>.
+If the fields are removed, <code>shopifyqlQuery</code> is no longer available to the app and its main function (the store's
+conversion funnel and the fixes derived from it) stops working.</p>
+
+<h2>What the app reads</h2>
+<p>Access scopes: <code>read_reports</code>, <code>read_products</code>, <code>read_shipping</code>. No <code>read_customers</code>,
+no <code>read_orders</code>. The app sends exactly these four ShopifyQL statements, all of them store-wide totals:</p>
+<pre><code>FROM sessions SHOW sessions, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout SINCE … UNTIL …
+FROM sessions SHOW sessions, sessions_that_completed_checkout GROUP BY session_device_type SINCE … UNTIL … ORDER BY sessions DESC LIMIT 20
+FROM sessions SHOW sessions, sessions_that_completed_checkout GROUP BY referring_channel SINCE … UNTIL … ORDER BY sessions DESC LIMIT 100
+FROM sales SHOW orders, total_sales SINCE … UNTIL …</code></pre>
+<p>None of them selects or groups by a customer, billing or shipping column. The app also never queries the
+<code>Customer</code>, <code>Order</code> or <code>AbandonedCheckout</code> objects.</p>
+
+<h2>Where the data is used</h2>
+<table>
+  <tr><th>Query</th><th>Shown to the merchant as</th></tr>
+  <tr><td>Sessions totals</td><td>The store's funnel: visits, added to cart, reached checkout, completed checkout.</td></tr>
+  <tr><td>Sessions by device</td><td>Conversion per device type (mobile, desktop, tablet).</td></tr>
+  <tr><td>Sessions by referring channel</td><td>Conversion per traffic source.</td></tr>
+  <tr><td>Sales totals</td><td>Orders and revenue of the period, used to estimate what each recommended fix is worth.</td></tr>
+</table>
+
+<h2>What the app stores</h2>
+<p>For each store: the Shopify session (access token) and the list of recommendations already shown with the merchant's answer
+(done / not for me). No customer record of any kind. The <code>customers/data_request</code> and <code>customers/redact</code>
+webhooks have nothing to return or erase; <code>shop/redact</code> erases the store's stored history.</p>
+</main>
+</body>
+</html>
